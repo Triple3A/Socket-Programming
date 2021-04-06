@@ -27,22 +27,25 @@
 class Server
 {
 private:
-	std::vector<User> users;
+	std::vector<User*> users;
 	std::vector<std::string> files;
-	int dataChannelPort = 8000;
-	int commandChannelPort = 8888;
-	int serverSocketFD;
+	// int dataChannelPort = 8000;
+	// int commandChannelPort = 8888;
+	// int serverSocketFD;
 	int new_command_socket;
 	int new_data_socket;
+	User* currentUser;
 
 public:
 	Server(std::string);
 	std::string firstWord(std::string &line);
 	int run();
-	User checkUser(std::string name);
-	void checkPass(User currentUser, std::string pass);
-	void checkPermition(User currentUser, std::string file);
+	User* checkUser(std::string name);
+	void checkPass(User* currentUser, std::string pass);
+	void checkPermission(User* currentUser, std::string file);
 	void initializeServerSocket();
+	void checkVolume(User* currentUser, int64_t amount);
+
 };
 
 #endif

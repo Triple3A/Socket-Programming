@@ -1,47 +1,57 @@
 #include "Server.h"
 #include "Exceptions.h"
-//#include <jsoncpp/json/value.h>
+#include "nlohmann/json.hpp"
 #include <fstream>
+#include <vector>
+#include <string>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include "filesystem.h"
 
 using namespace std;
+using json = nlohmann::json;
 
-Server::Server(string file)
+Server::Server(std::string file)
 {
-	//create server private fields.
+	json j;
 
-	std::ifstream people_file(file, std::ifstream::binary);
-	people_file >> uu;
+	ifstream people_file(file, ifstream::binary);
+	people_file >> j;
 
-	//The following lines will let you access the indexed objects.
-	for(auto a : uu["users"]){
-		string user = a["user"];
-		string pass = a["password"];
-		string admin = a["admin"];
-		bool isAdmin;
-		if(admin == "true")
-			isAdmin = true;
-		else
-			isAdmin = false;
-		string size = a["size"];
-		
-		User u(user, pass, isAdmin, atoi(size));
+	auto jj = json::parse(j);
+
+	auto uu = jj["users"];
+	auto f = jj["files"];
+
+	for (auto a : uu)
+	{
+		std::string user = a["user"];
+		std::string pass = a["password"];
+		bool admin = a["admin"];
+		int64_t size = a["size"];
+
+		User *u = new User(user, pass, admin, size * 1000);
 		users.push_back(u);
-	}				  //Prints the value for "Anna"
-	
-	for(auto a : uu["files"])
+	}
+
+	for (auto a : f)
 	{
 		files.push_back(a);
 	}
+
+	currentUser = NULL;
 }
 
-void initializeServerSocket()
+void Server::initializeServerSocket()
 {
 	int server_fd, new_socket, valread;
 	struct sockaddr_in address;
 	int opt = 1;
 	int addrlen = sizeof(address);
 	char buffer[1024] = {0};
-	char *hello = "Hello from server";
 	// cin >> hello;
 
 	// Creating socket file descriptor
@@ -71,19 +81,21 @@ void initializeServerSocket()
 	serverDataAddr.sin_addr.s_addr = INADDR_ANY;
 
 	// Forcefully attaching socket to the port 8080
-	if (bind(server_fd, (struct sockaddr *)&serverCommandAddr,
-			 sizeof(serverCommandAddr)) < 0)
-	{
-		perror("bind failed");
-		exit(EXIT_FAILURE);
-	}
+	// if (bind(server_fd, (struct sockaddr *)&serverCommandAddr,
+	// 		 sizeof(serverCommandAddr)) < 0)
+	// {
+	// 	perror("bind failed");
+	// 	exit(EXIT_FAILURE);
+	// }
+	bind(server_fd, (struct sockaddr *)&serverCommandAddr, sizeof(serverCommandAddr));
+	bind(server_fd, (struct sockaddr *)&serverDataAddr, sizeof(serverDataAddr));
 
-	if (bind(server_fd, (struct sockaddr *)&serverDataAddr,
-			 sizeof(serverDataAddr)) < 0)
-	{
-		perror("bind failed");
-		exit(EXIT_FAILURE);
-	}
+	// if (bind(server_fd, (struct sockaddr *)&serverDataAddr,
+	// 		 sizeof(serverDataAddr)) < 0)
+	// {
+	// 	perror("bind failed");
+	// 	exit(EXIT_FAILURE);
+	// }
 
 	if (listen(server_fd, 3) < 0)
 	{
@@ -106,10 +118,10 @@ void initializeServerSocket()
 	}
 }
 
-string Server::firstWord(string &line)
+std::string Server::firstWord(std::string &line)
 {
 	int end = line.find(' ');
-	string ans;
+	std::string ans;
 	if (end == -1)
 	{
 		ans = line;
@@ -123,120 +135,135 @@ string Server::firstWord(string &line)
 
 int Server::run()
 {
-	string commandLine;
-	string res = "";
-	string data = "";
+	std::string res = "";
+	std::string data = "";
 	//make socket.
 
 	initializeServerSocket();
 	char buffer[1024] = {0};
 	int valread = read(new_command_socket, buffer, strlen(buffer));
-	commandLine = str(buffer);
-	while (commandLine != "down")
+	std::string commandLine(buffer, strlen(buffer));
+	while (commandLine != "")
 	{
 		//listen to socket.
 
-		string command = this->firstWord(commandLine);
-		try{
-			switch (command)
+		std::string command = firstWord(commandLine);
+		try
+		{
+			if (command == "user")
 			{
-			case "user":
-				string name = this->firstWord(commandLine);
+				std::string name = this->firstWord(commandLine);
 				if (commandLine != "")
 					throw Syntax_Exception();
-				currentUser = this->checkUser(name)
+				currentUser = this->checkUser(name);
 				res = "331: User name okay, need password.";
 				send(new_command_socket, res.c_str(), strlen(res.c_str()), 0);
-				break;
-			case "pass":
-				string pass = this->firstWord(commandLine);
+			}
+			else if (command == "pass")
+			{
+				if (currentUser == NULL)
+					throw Login_Exception();
+				std::string pass = this->firstWord(commandLine);
 				if (commandLine != "")
 					throw Syntax_Exception();
-				this->chekPass(currentUser, pass);
+				this->checkPass(currentUser, pass);
 				res = "230:‬‬ ‫‪User‬‬ ‫‪logged‬‬ ‫‪in,‬‬ ‫‪proceed.‬‬ ‫‪Logged‬‬ ‫‪out‬‬ ‫‪if‬‬ ‫‪appropriate.";
 				send(new_command_socket, res.c_str(), strlen(res.c_str()), 0);
-				break;
-			case "pwd":
+			}
+			else if (command == "pwd")
+			{
 				if (commandLine != "")
 					throw Syntax_Exception();
 				char pwd[1024];
 				getcwd(pwd, 1024);
-				strcpy(res, "257: ");
-				strcat(res, pwd);
+				res = "257: " + std::string(pwd, 1024);
 				send(new_command_socket, res.c_str(), strlen(res.c_str()), 0);
-				break;
-			case "mkd":
-				string newd = this->firstWord(commandLine);
+			}
+			else if (command == "mkd")
+			{
+				std::string newd = this->firstWord(commandLine);
 				if (commandLine != "")
 					throw Syntax_Exception();
-				mkdir(newd);
-				strcpy(res, "257: ");
-				strcat(res, newd);
-				strcat(res, "created.");
+				mkdir(newd.c_str(), 0777);
+				res = "257: " + newd + " created.";
 				send(new_command_socket, res.c_str(), strlen(res.c_str()), 0);
-				break;
-			case "dele":
+			}
+			else if (command == "dele")
+			{
 				if (commandLine == "")
 					throw Syntax_Exception();
-				string _command = this->firstWord(commandLine);
+				std::string _command = this->firstWord(commandLine);
 				if (commandLine == "")
 					throw Syntax_Exception();
-				string _file = this->firstWord(commandLine);
+				std::string _file = this->firstWord(commandLine);
 				if (commandLine != "")
 					throw Syntax_Exception();
-				checkPermition(currentUser,_file);
+				checkPermission(currentUser, _file);
 				if (_command == "-d")
-					rmdir(_file);
+					rmdir(_file.c_str());
 				if (_command == "-f")
-					remove(_file);
+					remove(_file.c_str());
+
+				res = "250: <filename/directory path> deleted.";
 				send(new_command_socket, res.c_str(), strlen(res.c_str()), 0);
-				break;
-			case "ls":
+			}
+			else if (command == "ls")
+			{
 				if (commandLine != "")
 					throw Syntax_Exception();
 				char pwd[1024];
 				getcwd(pwd, 1024);
-				for (const auto &entry : filesystem::directory_iterator(pwd))
+				for (auto &entry : filesystem::directory_iterator(pwd))
 				{
-					data = data + entry.path();
-					data = data + "\n"
+					data = data + std::string(entry.path(), 2000);
+					data = data + "\n";
 				}
 				send(new_data_socket, data.c_str(), strlen(data.c_str()), 0);
 				res = "226: List transfer done.";
 				send(new_command_socket, res.c_str(), strlen(res.c_str()), 0);
-				break;
-			case "cwd":
+			}
+			else if (command == "cwd")
+			{
 				if (commandLine == "")
 					throw Syntax_Exception();
-				string path = this->firstWord(commandLine);
+				std::string path = this->firstWord(commandLine);
 				if (commandLine != "")
 					throw Syntax_Exception();
-				filesystem::current_path(path);
+				filesystem::current_path(path.c_str());
 				res = "250:‬‬ ‫‪Successful‬‬ ‫‪change.";
 				send(new_command_socket, res.c_str(), strlen(res.c_str()), 0);
-				break;
-			case "rename":
+			}
+			else if (command == "rename")
+			{
 				if (commandLine == "")
 					throw Syntax_Exception();
-				string from = this->firstWord(commandLine);
+				std::string from = this->firstWord(commandLine);
 				if (commandLine == "")
 					throw Syntax_Exception();
-				string to = this->firstWord(commandLine);
+				std::string to = this->firstWord(commandLine);
 				if (commandLine != "")
 					throw Syntax_Exception();
-				rename(from, to);
+				checkPermission(currentUser, from);
+				rename(from.c_str(), to.c_str());
 				res = "250:‬‬ ‫‪Successful‬‬ ‫‪change.";
 				send(new_command_socket, res.c_str(), strlen(res.c_str()), 0);
-				break;
-			case "retr":
+			}
+			else if (command == "retr")
+			{
 				if (commandLine == "")
 					throw Syntax_Exception();
-				string name = this->firstWord(commandLine);
+				std::string name = this->firstWord(commandLine);
 				if (commandLine != "")
 					throw Syntax_Exception();
-				ifstream fs(name);
-				string line;
-				string data = "";
+				checkPermission(currentUser, name);
+				
+				ifstream fs(name, ios::binary);
+				fs.seekg(0, ios::end);
+				int64_t amount = fs.tellg();
+				checkVolume(currentUser, amount);
+				currentUser->decVolume(amount);
+				std::string line;
+				std::string data = "";
 				while (getline(fs, line))
 				{
 					data = data + line;
@@ -245,8 +272,9 @@ int Server::run()
 				send(new_data_socket, data.c_str(), strlen(data.c_str()), 0);
 				res = "226:‬‬ ‫‪Successful‬‬ ‫‪Download.";
 				send(new_command_socket, res.c_str(), strlen(res.c_str()), 0);
-				break;
-			case "help":
+			}
+			else if (command == "help")
+			{
 				if (commandLine != "")
 					throw Syntax_Exception();
 				res = "214:\nUser [name]: gets username.\n";
@@ -261,51 +289,72 @@ int Server::run()
 				res = res + "help: explains server commands.\n";
 				res = res + "quit: takes user out from the system.\n";
 				send(new_command_socket, res.c_str(), strlen(res.c_str()), 0);
-				break;
-			case "quit":
+			}
+			else if (command == "quit")
+			{
 				res = "221: Successful Quit.\n";
 				send(new_command_socket, res.c_str(), strlen(res.c_str()), 0);
 				close(new_command_socket);
 				close(new_data_socket);
-				break;
-			default:
+			}
+			else
+			{
 				throw Syntax_Exception();
 			}
-		}catch(User_Pass_Exception e){
-			cout<<e.what()<<endl;
-		}catch(Syntax_Exception e){
-			cout<<e.what()<<endl;
 		}
-		catch(Volume_Exception e){
-			cout<<e.what()<<endl;
+		catch (User_Pass_Exception e)
+		{
+			send(new_command_socket, e.what().c_str(), strlen(e.what().c_str()), 0);
+			// cout<<e.what()<<endl;
 		}
-		catch(Permition_Exception e){
-			cout<<e.what()<<endl;
+		catch (Syntax_Exception e)
+		{
+			send(new_command_socket, e.what().c_str(), strlen(e.what().c_str()), 0);
+			// cout<<e.what()<<endl;
+		}
+		catch (Volume_Exception e)
+		{
+			send(new_command_socket, e.what().c_str(), strlen(e.what().c_str()), 0);
+			// cout<<e.what()<<endl;
+		}
+		catch (Permission_Exception e)
+		{
+			send(new_command_socket, e.what().c_str(), strlen(e.what().c_str()), 0);
+			// cout<<e.what()<<endl;
 		}
 	}
 	return new_command_socket;
 }
 
-User Server::checkUser(string name){
+User *Server::checkUser(std::string name)
+{
 	int i;
 	for (i = 0; i < this->users.size(); i++)
 	{
-		if (this->users[i].getName() == name)
+		if (this->users[i]->getName() == name)
 			return users[i];
 	}
 	throw User_Pass_Exception();
 }
 
-void Server::checkPass(User currentUser, string pass)
+void Server::checkPass(User *currentUser, std::string pass)
 {
-	if (currentUser.getPass() != pass)
+	if (currentUser->getPass() != pass)
 		throw User_Pass_Exception();
 }
 
-void Server::checkPermition(User currentUser, string file)
+void Server::checkPermission(User *currentUser, std::string file)
 {
-	if(currentUser.isAdmin()) return;
+	if (currentUser->isAdmin())
+		return;
 	int i;
 	for (i = 0; i < this->files.size(); i++)
-		if (this->files[i] == file) throw Permition_Exception();
+		if (this->files[i] == file)
+			throw Permission_Exception();
+}
+
+void Server::checkVolume(User* currentUser, int64_t amount)
+{
+	if (currentUser->getVolume() < amount)
+		throw Volume_Exception();
 }

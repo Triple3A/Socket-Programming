@@ -12,7 +12,6 @@ void Client::initialSocket() {
     int valread;
 	struct sockaddr_in serv_command_addr;
     struct sockaddr_in serv_data_addr;
-	char *hello = "Hello from client";
     // cin >> hello;
 	char buffer[1024] = {0};
 	if ((command_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)

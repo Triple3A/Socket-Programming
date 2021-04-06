@@ -9,15 +9,15 @@ private:
 	std::string name;
 	std::string pass;
 	bool admin;
-	int volume;
+	int64_t volume;
 
 public:
-	User(std::string _name, std::string _pass, bool _admin, int _size);
+	User(std::string _name, std::string _pass, bool _admin, int64_t _size);
 	std::string getName() { return name; }
 	std::string getPass() { return pass; }
 	bool isAdmin() { return admin; }
-	int getVolume() { return volume; }
-	void decVolume(int amount) { volume-=amount; }
+	int64_t getVolume() { return volume; }
+	void decVolume(int64_t amount) { volume -= amount; }
 };
 
 #endif
