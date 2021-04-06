@@ -8,7 +8,7 @@
 #include <fstream>
 #include <string.h>
 #include <exception>
-#include <filesystem>
+#include <experimental/filesystem>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -27,7 +27,6 @@
 class Server
 {
 private:
-	String_Handler sh;
 	std::vector<User> users;
 	std::vector<std::string> files;
 	int dataChannelPort = 8000;
@@ -40,7 +39,9 @@ public:
 	Server(std::string);
 	std::string firstWord(std::string &line);
 	int run();
-	void checkUser(std::string name);
+	User checkUser(std::string name);
+	void checkPass(User currentUser, std::string pass);
+	void checkPermition(User currentUser, std::string file);
 	void initializeServerSocket();
 };
 

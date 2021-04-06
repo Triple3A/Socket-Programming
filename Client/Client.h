@@ -1,5 +1,5 @@
-#ifndef Client
-#define Client
+#ifndef CLIENT
+#define CLIENT
 
 #include <stdio.h>
 #include <sys/socket.h>

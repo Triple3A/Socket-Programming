@@ -1,7 +1,7 @@
 #ifndef USER
 #define USER
 
-#include <string.h>
+#include <string>
 
 class User
 {
@@ -12,11 +12,12 @@ private:
 	int volume;
 
 public:
-	User(std::string, std::string, bool, int);
+	User(std::string _name, std::string _pass, bool _admin, int _size);
 	std::string getName() { return name; }
-	std::string gatPass() { return pass; }
+	std::string getPass() { return pass; }
 	bool isAdmin() { return admin; }
 	int getVolume() { return volume; }
+	void decVolume(int amount) { volume-=amount; }
 };
 
 #endif

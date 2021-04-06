@@ -69,8 +69,8 @@ void Client::run() {
         char data_buf[3000];
         int valread1 = read( command_sock , command_buf, 1024);
         int valread2 = read( data_sock, data_buf, 3000);
-        string data = str(data_buf);
-        string res = str(command_buf);
+        string data = (string)data_buf;//str(data_buf);
+        string res = (string)command_buf;//str(command_buf);
 
         if(data != "")
             cout << data << '\n';
